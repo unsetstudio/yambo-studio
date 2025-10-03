@@ -1,5 +1,9 @@
 function isTouchDevice() {
-  return "ontouchstart" in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+  return (
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    navigator.msMaxTouchPoints > 0
+  );
 }
 
 const remToPixels = (rem) => rem * 16;
@@ -68,13 +72,27 @@ barba.hooks.beforeEnter(function () {
   currentYear();
 });
 
+barba.hooks.beforeLeave(function (data) {
+  // Clean up Objects page listeners when leaving
+  if (data.current.namespace === "objects") {
+    cleanupObjectsListeners();
+  }
+});
+
+barba.hooks.leave(function (data) {
+  // Also clean up during the leave transition
+  if (data.current.namespace === "objects") {
+    cleanupObjectsListeners();
+  }
+});
+
 barba.hooks.enter(function (data) {
   let burgerText = data.next.namespace;
 
   if (data.next.namespace === "objects-single") {
     burgerText = "objects";
   } else if (data.next.namespace === "artworks-single") {
-    burgerText = "artworks";
+    burgerText = "art";
   } else if (data.next.namespace === "home") {
     burgerText = "work";
   } else if (data.next.namespace === "projects") {
@@ -146,7 +164,7 @@ barba.init({
       afterEnter() {
         document.querySelector(".project-hero").style.opacity = "1";
         projectsNavigation();
-        projectSrollAnimations();
+        projectScrollAnimations();
 
         //flag resize
         function projectResize() {
@@ -212,18 +230,19 @@ barba.init({
       namespace: "artworks",
       beforeEnter() {
         iframePoster();
+        artworksSetInitialState();
       },
       afterEnter() {
+        artworksFitText();
+        firstArtworkFadeIn();
         artworksFadeIn();
         artworksMarquee();
-
-		artworksFitText();
-        artworksSetInitialState();
 
         //flag resize
         function artworksResize() {
           artworksFitText();
           artworksSetInitialState();
+          firstArtworkFadeIn();
           artworksFadeIn();
           artworksMarquee();
         }
@@ -236,20 +255,16 @@ barba.init({
       namespace: "artworks-single",
       beforeEnter() {
         iframePoster();
+        projectsSwiper();
         videoComponent();
-        artworksFitText();
-        artworksSetInitialState();
       },
       afterEnter() {
-        artworksFadeIn();
-        artworksMarquee();
+        artworksFitText();
+        projectScrollAnimations();
 
         //flag resize
         function artworkSingleResize() {
           artworksFitText();
-          artworksSetInitialState();
-          artworksFadeIn();
-          artworksMarquee();
         }
         window.addEventListener("resize", function () {
           debounce(artworkSingleResize, 1000); // 1 second delay after resize
@@ -628,7 +643,9 @@ barba.init({
           opacity: 0,
           y: -50,
           onComplete: () => {
-            document.querySelector(".search-input__wrapper").classList.remove("active");
+            document
+              .querySelector(".search-input__wrapper")
+              .classList.remove("active");
             document
               .querySelector(".navbar__search")
               .removeEventListener("click", searchIconHandler);
@@ -944,19 +961,21 @@ function customCursors() {
           carousel.querySelectorAll(".swiper-slide").forEach((slide, index) => {
             slide.addEventListener("mouseenter", () => {
               currentSlide = index + 1;
-              document.querySelector(".cursor-carousel .current-slide").innerHTML =
-                addZero(currentSlide, 2) + "/";
+              document.querySelector(
+                ".cursor-carousel .current-slide"
+              ).innerHTML = addZero(currentSlide, 2) + "/";
             });
           });
 
           if (carouselName) {
-            document.querySelector(".cursor-carousel .carousel-name").innerHTML = carouselName;
+            document.querySelector(
+              ".cursor-carousel .carousel-name"
+            ).innerHTML = carouselName;
           }
-          document.querySelector(".cursor-carousel .total-slides").innerHTML = addZero(
-            totalSlides,
-            2
-          );
-          document.querySelector(".cursor-carousel .current-slide").innerHTML = currentSlide + "/";
+          document.querySelector(".cursor-carousel .total-slides").innerHTML =
+            addZero(totalSlides, 2);
+          document.querySelector(".cursor-carousel .current-slide").innerHTML =
+            currentSlide + "/";
         }
       });
 
@@ -987,22 +1006,27 @@ function customCursors() {
 }
 
 function iframePoster() {
-  document.querySelectorAll("[data-vimeo-poster='true']").forEach(function (componentEl) {
-    const iframeEl = componentEl.querySelector("iframe");
+  document
+    .querySelectorAll("[data-vimeo-poster='true']")
+    .forEach(function (componentEl) {
+      const iframeEl = componentEl.querySelector("iframe");
 
-    if (!componentEl.classList.contains("w-condition-invisible")) {
-      if (iframeEl.hasAttribute("data-src") && !iframeEl.hasAttribute("src")) {
-        let dataSrc = iframeEl.getAttribute("data-src");
-        iframeEl.setAttribute("src", dataSrc);
+      if (!componentEl.classList.contains("w-condition-invisible")) {
+        if (
+          iframeEl.hasAttribute("data-src") &&
+          !iframeEl.hasAttribute("src")
+        ) {
+          let dataSrc = iframeEl.getAttribute("data-src");
+          iframeEl.setAttribute("src", dataSrc);
+        }
       }
-    }
 
-    let player = new Vimeo.Player(iframeEl);
+      let player = new Vimeo.Player(iframeEl);
 
-    player.on("play", function () {
-      iframeEl.style.opacity = 1;
+      player.on("play", function () {
+        iframeEl.style.opacity = 1;
+      });
     });
-  });
 }
 
 function currentYear() {
@@ -1089,15 +1113,17 @@ function mobileBurger() {
     }
   });
 
-  document.querySelectorAll(".navbar__search, .navbar__link, .navbar__logo").forEach((el) => {
-    el.addEventListener("click", () => {
-      if (window.matchMedia("(max-width: 991px)").matches) {
-        if (navbarOpen != "false") {
-          closeNavbar();
+  document
+    .querySelectorAll(".navbar__search, .navbar__link, .navbar__logo")
+    .forEach((el) => {
+      el.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 991px)").matches) {
+          if (navbarOpen != "false") {
+            closeNavbar();
+          }
         }
-      }
+      });
     });
-  });
 }
 
 /** HOMEPAGE */
@@ -1256,7 +1282,8 @@ function homepageHeroMobile() {
                 opacity: i === activeIndex ? 1 : 0,
                 onStart: function () {
                   text.style.color =
-                    i === activeIndex && text.getAttribute("data-hover") === "light"
+                    i === activeIndex &&
+                    text.getAttribute("data-hover") === "light"
                       ? "#f8f8f8"
                       : "#070707";
                 },
@@ -1294,7 +1321,9 @@ function projectsIndex() {
   if (window.matchMedia("(min-width: 992px)").matches) {
     const projectsContainer = document.querySelector('[data-index="projects"]');
     const projects = document.querySelectorAll(".project-index__link"); //get all projects inside the list
-    const assetContainer = document.querySelector(".project-index__asset-wrapper"); //get the wrapper for the asset
+    const assetContainer = document.querySelector(
+      ".project-index__asset-wrapper"
+    ); //get the wrapper for the asset
 
     //opacity animation for the asset container
     projectsContainer.addEventListener("mouseenter", () => {
@@ -1308,7 +1337,9 @@ function projectsIndex() {
           firstMouseMove = false;
         }
 
-        assetContainer.style.transform = `translate(${e.clientX + 20}px, ${e.clientY + 20}px)`;
+        assetContainer.style.transform = `translate(${e.clientX + 20}px, ${
+          e.clientY + 20
+        }px)`;
       });
 
       gsap.to(assetContainer, {
@@ -1339,14 +1370,17 @@ function projectsIndex() {
 
       el.addEventListener("mouseenter", () => {
         //no mouseenter
-        let projectImage = el.querySelector('input[name="project-image"]').value, //valor da imagem
+        let projectImage = el.querySelector(
+            'input[name="project-image"]'
+          ).value, //valor da imagem
           projectVideo = el.querySelector('input[name="project-video"]').value; //valor do video id
 
         if (projectVideo) {
           //se existir vÃ­deo
           let vimeoWrapper = document.createElement("div");
           vimeoWrapper.className = "vimeo-wrapper";
-          vimeoWrapper.style.background = "url(" + projectImage + ") center/cover no-repeat";
+          vimeoWrapper.style.background =
+            "url(" + projectImage + ") center/cover no-repeat";
 
           let iframe = document.createElement("iframe");
           iframe.style.width = "100%";
@@ -1368,7 +1402,9 @@ function projectsIndex() {
           projectAsset.className = "project-index__asset";
           projectAsset.appendChild(vimeoWrapper);
 
-          document.querySelector(".project-index__assets").appendChild(projectAsset); //create the element inside the container
+          document
+            .querySelector(".project-index__assets")
+            .appendChild(projectAsset); //create the element inside the container
 
           projectAsset.style.zIndex = 2;
 
@@ -1423,7 +1459,9 @@ function projectsIndex() {
       });
 
       el.addEventListener("mouseleave", () => {
-        let projectAsset = document.querySelector(".project-index__asset:first-of-type");
+        let projectAsset = document.querySelector(
+          ".project-index__asset:first-of-type"
+        );
 
         if (projectAsset) {
           projectAsset.style.zIndex = 1;
@@ -1435,7 +1473,9 @@ function projectsIndex() {
             ease: "asset-index",
             onComplete: function () {
               //not working with the varibale
-              document.querySelector(".project-index__asset:first-of-type").remove();
+              document
+                .querySelector(".project-index__asset:first-of-type")
+                .remove();
             },
           });
 
@@ -1473,13 +1513,15 @@ function scrollDownAnimation() {
         });
       });
 
-      document.querySelector(".btn-project-scroll").addEventListener("click", function () {
-        const scrollPin = document.querySelector(".scroll-to-placeholder");
-        window.scrollTo({
-          top: scrollPin.offsetTop - 110,
-          behavior: "smooth",
+      document
+        .querySelector(".btn-project-scroll")
+        .addEventListener("click", function () {
+          const scrollPin = document.querySelector(".scroll-to-placeholder");
+          window.scrollTo({
+            top: scrollPin.offsetTop - 110,
+            behavior: "smooth",
+          });
         });
-      });
     }, 1000);
   }
 }
@@ -1612,49 +1654,56 @@ function projectsSwiper() {
 }
 
 function videoComponent() {
-  document.querySelectorAll("[js-vimeo-element='component']").forEach(function (componentEl) {
-    const iframeEl = componentEl.querySelector("iframe");
-    const coverEl = componentEl.querySelector("[js-vimeo-element='cover']");
-    const coverImage = componentEl.querySelector("[js-vimeo-element='media']");
-    const timeline = componentEl.querySelector(".proj-video-timeline");
+  document
+    .querySelectorAll("[js-vimeo-element='component']")
+    .forEach(function (componentEl) {
+      const iframeEl = componentEl.querySelector("iframe");
+      const coverEl = componentEl.querySelector("[js-vimeo-element='cover']");
+      const coverImage = componentEl.querySelector(
+        "[js-vimeo-element='media']"
+      );
+      const timeline = componentEl.querySelector(".proj-video-timeline");
 
-    iframeEl.setAttribute("src", iframeEl.getAttribute("src") + "&playsinline=0");
+      iframeEl.setAttribute(
+        "src",
+        iframeEl.getAttribute("src") + "&playsinline=0"
+      );
 
-    let player = new Vimeo.Player(iframeEl);
+      let player = new Vimeo.Player(iframeEl);
 
-    player.on("play", function () {
-      componentEl.classList.add("is-playing");
-    });
+      player.on("play", function () {
+        componentEl.classList.add("is-playing");
+      });
 
-    player.on("pause", function () {
-      componentEl.classList.remove("is-playing");
-      coverEl.style.cssText = "opacity: 1;";
-    });
+      player.on("pause", function () {
+        componentEl.classList.remove("is-playing");
+        coverEl.style.cssText = "opacity: 1;";
+      });
 
-    coverEl.addEventListener("click", function () {
-      // when clicking the cover
-      coverEl.style.cssText = "opacity: 0;";
-      coverImage.style.cssText = "opacity: 0";
+      coverEl.addEventListener("click", function () {
+        // when clicking the cover
+        coverEl.style.cssText = "opacity: 0;";
+        coverImage.style.cssText = "opacity: 0";
 
-      if (componentEl.classList.contains("is-playing")) {
-        player.pause();
-      } else {
-        player.play();
+        if (componentEl.classList.contains("is-playing")) {
+          player.pause();
+        } else {
+          player.play();
+        }
+      });
+
+      // update timeline
+      player.getDuration().then(function (duration) {
+        setInterval(updateTimelineBar, 100, duration);
+      });
+
+      function updateTimelineBar(duration) {
+        player.getCurrentTime().then(function (time) {
+          var progress = (time / duration) * 100;
+          timeline.style.width = progress + "%";
+        });
       }
     });
-
-    // update timeline
-    player.getDuration().then(function (duration) {
-      setInterval(updateTimelineBar, 100, duration);
-    });
-
-    function updateTimelineBar(duration) {
-      player.getCurrentTime().then(function (time) {
-        var progress = (time / duration) * 100;
-        timeline.style.width = progress + "%";
-      });
-    }
-  });
 }
 
 function stickyReturn() {
@@ -1688,36 +1737,66 @@ function projectsNavigation() {
     let currentProject = allProjects
         .find('[href$="' + currentSlug + '"]')
         .closest(".projects-index"),
-      prevProject = allProjects.find(".projects-index").eq(currentProject.index() - 1),
-      prevAssets = allProjects.find(".project-index__data").eq(currentProject.index() - 1),
-      nextProject = allProjects.find(".projects-index").eq(currentProject.index() + 1),
-      nextAssets = allProjects.find(".project-index__data").eq(currentProject.index() + 1);
+      prevProject = allProjects
+        .find(".projects-index")
+        .eq(currentProject.index() - 1),
+      prevAssets = allProjects
+        .find(".project-index__data")
+        .eq(currentProject.index() - 1),
+      nextProject = allProjects
+        .find(".projects-index")
+        .eq(currentProject.index() + 1),
+      nextAssets = allProjects
+        .find(".project-index__data")
+        .eq(currentProject.index() + 1);
 
-    let prevTitle = prevProject.find(".project-info__title p:last-of-type").text(),
+    let prevTitle = prevProject
+        .find(".project-info__title p:last-of-type")
+        .text(),
       prevYear = prevProject.find(".project-info__year").text(),
       prevImage = prevAssets.find('input[name="project-image"]').val(),
       prevUrl = prevProject.find(".project-index__link").attr("href");
 
-    let nextTitle = nextProject.find(".project-info__title p:last-of-type").text(),
+    let nextTitle = nextProject
+        .find(".project-info__title p:last-of-type")
+        .text(),
       nextYear = nextProject.find(".project-info__year").text(),
       nextImage = nextAssets.find('input[name="project-image"]').val(),
       nextUrl = nextProject.find(".project-index__link").attr("href");
 
-    document.querySelector('.proj-others__wrapper[data-proj-others="prev"]').href = prevUrl;
-    document.querySelector('.proj-others__image[data-proj-others="prev"]').src = prevImage;
-    document.querySelector('.proj-others__name[data-proj-others="prev"]').innerHTML = prevTitle;
-    document.querySelector('.proj-others__year[data-proj-others="prev"]').innerHTML = prevYear;
+    document.querySelector(
+      '.proj-others__wrapper[data-proj-others="prev"]'
+    ).href = prevUrl;
+    document.querySelector('.proj-others__image[data-proj-others="prev"]').src =
+      prevImage;
+    document.querySelector(
+      '.proj-others__name[data-proj-others="prev"]'
+    ).innerHTML = prevTitle;
+    document.querySelector(
+      '.proj-others__year[data-proj-others="prev"]'
+    ).innerHTML = prevYear;
 
-    document.querySelector('.proj-others__wrapper[data-proj-others="next"]').href = nextUrl;
-    document.querySelector('.proj-others__image[data-proj-others="next"]').src = nextImage;
-    document.querySelector('.proj-others__name[data-proj-others="next"]').innerHTML = nextTitle;
-    document.querySelector('.proj-others__year[data-proj-others="next"]').innerHTML = nextYear;
+    document.querySelector(
+      '.proj-others__wrapper[data-proj-others="next"]'
+    ).href = nextUrl;
+    document.querySelector('.proj-others__image[data-proj-others="next"]').src =
+      nextImage;
+    document.querySelector(
+      '.proj-others__name[data-proj-others="next"]'
+    ).innerHTML = nextTitle;
+    document.querySelector(
+      '.proj-others__year[data-proj-others="next"]'
+    ).innerHTML = nextYear;
   });
 }
 
-function projectSrollAnimations() {
+function projectScrollAnimations() {
   setTimeout(() => {
-    const sectionsLines = [".proj-text-col6", ".proj-text-col8", ".proj-text-block"];
+    const sectionsLines = [
+      ".proj-text-col6",
+      ".proj-text-col8",
+      ".proj-text-block",
+    ];
 
     const sections = [
       ".proj-text-intro",
@@ -1785,6 +1864,12 @@ function projectSrollAnimations() {
                 start: "top-=40 bottom-=100",
                 end: "bottom bottom",
               },
+              before: function () {
+                let artworksContent = document.querySelector(".artworks-content");
+                if (artworksContent) {
+                  artworksContent.style.opacity = "1";
+                }
+              },
               onComplete: function () {
                 el.classList.add("animated");
               },
@@ -1798,10 +1883,13 @@ function projectSrollAnimations() {
       const elements = document.querySelectorAll(classSelector);
 
       elements.forEach((el) => {
-        const splitLines = new SplitText(el.querySelector(".proj-text__paragraph"), {
-          type: "lines",
-          linesClass: "line line++",
-        });
+        const splitLines = new SplitText(
+          el.querySelector(".proj-text__paragraph"),
+          {
+            type: "lines",
+            linesClass: "line line++",
+          }
+        );
 
         const blockLink = el.querySelector(".proj-text-block__link");
 
@@ -1843,7 +1931,7 @@ function objectsHeroLines() {
     document.fonts.ready.then(function () {
       let objectsHeroText = document.querySelector(".objects-hero__text");
 
-      if (!objectsHeroText.classList.contains("has-animated")) {
+      if (objectsHeroText && !objectsHeroText.classList.contains("has-animated")) {
         objectsHeroText.classList.add("has-animated");
 
         gsap.set(document.querySelector(".objects-hero"), { opacity: 1 });
@@ -1864,11 +1952,17 @@ function objectsHeroLines() {
 
             finish
               .to(splitLines.lines, { clearProps: "all" })
-              .to(objectsHeroText.style, { color: "#dedede", mixBlendMode: "difference" }, 0) // synchronize color and mixBlendMode
+              .to(
+                objectsHeroText.style,
+                { color: "#dedede", mixBlendMode: "difference" },
+                0
+              ) // synchronize color and mixBlendMode
               .call(() => {
-                document.querySelectorAll(".objects-index__text--areas").forEach(function (el) {
-                  el.classList.add("obj-areas-underline");
-                });
+                document
+                  .querySelectorAll(".objects-index__text--areas")
+                  .forEach(function (el) {
+                    el.classList.add("obj-areas-underline");
+                  });
               });
           },
         });
@@ -1909,6 +2003,10 @@ function objectsHeroLines() {
   }
 }
 
+// Store all Objects page event handlers for cleanup
+let objectsMousemoveHandler = null;
+let objectsEventListeners = [];
+
 function objectsHeroDesktop() {
   if (window.matchMedia("(min-width: 992px)").matches) {
     // when videos are ready, show the container
@@ -1935,16 +2033,18 @@ function objectsHeroDesktop() {
 
     // trigger the mousemove interaction for the active image
     if (activeImage) {
-      document.addEventListener("mousemove", (e) => {
+      objectsMousemoveHandler = (e) => {
         let xPos = (e.clientX - activeImage.offsetLeft) * 0.1;
         let yPos = (e.clientY - activeImage.offsetTop) * 0.1;
 
         activeImage.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
-      });
+      };
+      
+      document.addEventListener("mousemove", objectsMousemoveHandler);
     }
 
     heroWords.forEach(function (word) {
-      word.addEventListener("mouseenter", function () {
+      const mouseenterHandler = function () {
         let code = this.getAttribute("data-obj-word");
         let imageEl = document.querySelector('[data-obj-video="' + code + '"]');
 
@@ -1954,9 +2054,36 @@ function objectsHeroDesktop() {
           imageEl.classList.add("active");
           activeImage = imageEl;
         }
-      });
+      };
+      
+      word.addEventListener("mouseenter", mouseenterHandler);
+      objectsEventListeners.push({ element: word, event: "mouseenter", handler: mouseenterHandler });
     });
   }
+}
+
+// Function to clean up Objects page event listeners
+function cleanupObjectsListeners() {
+  console.log("Cleaning up Objects page listeners...");
+  
+  // Remove global mousemove handler
+  if (objectsMousemoveHandler) {
+    document.removeEventListener("mousemove", objectsMousemoveHandler);
+    objectsMousemoveHandler = null;
+    console.log("Removed global mousemove handler");
+  }
+  
+  // Remove all stored event listeners
+  objectsEventListeners.forEach(({ element, event, handler }) => {
+    if (element && element.removeEventListener) {
+      element.removeEventListener(event, handler);
+    }
+  });
+  
+  console.log(`Removed ${objectsEventListeners.length} event listeners`);
+  
+  // Clear the array
+  objectsEventListeners = [];
 }
 
 function objectsIndex() {
@@ -1964,14 +2091,19 @@ function objectsIndex() {
     const objectsContainer = document.querySelector('[data-index="objects"]');
     const objects = document.querySelectorAll(".objects-index__link");
     const allAssets = document.querySelectorAll(".objects-index__assets"); //get all images/videos
-    const assetContainer = document.querySelector(".objects-index__asset-wrapper"); //get the wrapper for the asset
+    const assetContainer = document.querySelector(
+      ".objects-index__asset-wrapper"
+    ); //get the wrapper for the asset
     let isVideoPlaying = false;
 
+    // Store mousemove handler for cleanup
+    let containerMousemoveHandler = null;
+
     // opacity animation for the asset container
-    objectsContainer.addEventListener("mouseenter", () => {
+    const mouseenterHandler = () => {
       let firstMouseMove = true;
 
-      objectsContainer.addEventListener("mousemove", function (e) {
+      containerMousemoveHandler = function (e) {
         //no mousemove, mexe o asset container
         if (firstMouseMove) {
           assetContainer.style.top = "0";
@@ -1979,33 +2111,46 @@ function objectsIndex() {
           firstMouseMove = false;
         }
 
-        assetContainer.style.transform = `translate(${e.clientX + 20}px, ${e.clientY + 20}px)`;
-      });
+        assetContainer.style.transform = `translate(${e.clientX + 20}px, ${
+          e.clientY + 20
+        }px)`;
+      };
+
+      objectsContainer.addEventListener("mousemove", containerMousemoveHandler);
 
       gsap.to(assetContainer, {
         autoAlpha: 1,
         duration: 0.25,
         ease: "blinking-line",
       });
-    });
+    };
 
-    objectsContainer.addEventListener("mouseleave", () => {
+    const mouseleaveHandler = () => {
       gsap.to(assetContainer, {
         autoAlpha: 0,
         duration: 0.25,
         ease: "blinking-line",
       });
-    });
+    };
+
+    objectsContainer.addEventListener("mouseenter", mouseenterHandler);
+    objectsContainer.addEventListener("mouseleave", mouseleaveHandler);
+
+    // Store these listeners for cleanup
+    objectsEventListeners.push(
+      { element: objectsContainer, event: "mouseenter", handler: mouseenterHandler },
+      { element: objectsContainer, event: "mouseleave", handler: mouseleaveHandler }
+    );
 
     objects.forEach((el, index) => {
       //em cada item da lista
       let singleUrl = el.getAttribute("href");
 
-      el.addEventListener("click", () => {
+      const clickHandler = () => {
         barba.prefetch(singleUrl);
-      });
+      };
 
-      el.addEventListener("mouseenter", () => {
+      const mouseenterHandler = () => {
         //no mouseenter
         let currentAsset = allAssets[index];
 
@@ -2050,9 +2195,9 @@ function objectsIndex() {
               });
           }
         }
-      });
+      };
 
-      el.addEventListener("mouseleave", () => {
+      const mouseleaveHandler = () => {
         let currentAsset = allAssets[index];
 
         let iframe = currentAsset.querySelector("iframe");
@@ -2072,7 +2217,18 @@ function objectsIndex() {
           player.pause();
           isVideoPlaying = false;
         }
-      });
+      };
+
+      el.addEventListener("click", clickHandler);
+      el.addEventListener("mouseenter", mouseenterHandler);
+      el.addEventListener("mouseleave", mouseleaveHandler);
+
+      // Store these listeners for cleanup
+      objectsEventListeners.push(
+        { element: el, event: "click", handler: clickHandler },
+        { element: el, event: "mouseenter", handler: mouseenterHandler },
+        { element: el, event: "mouseleave", handler: mouseleaveHandler }
+      );
     });
   }
 }
@@ -2080,7 +2236,7 @@ function objectsIndex() {
 function enquireHover() {
   if (window.matchMedia("(min-width: 768px)").matches) {
     document.querySelectorAll(".enquire-button").forEach((button) => {
-      button.addEventListener("mouseenter", function (event) {
+      const mouseenterHandler = function (event) {
         let hoverText = this.getAttribute("data-text-hover");
         if (!hoverText) {
           hoverText = this.getAttribute("data-text-original");
@@ -2097,7 +2253,9 @@ function enquireHover() {
             onComplete: function () {
               button.textContent = hoverText;
 
-              let splitHoverText = new SplitText(button, { type: "words,chars" });
+              let splitHoverText = new SplitText(button, {
+                type: "words,chars",
+              });
               gsap.set(splitHoverText.chars, { opacity: 0 });
 
               gsap.to(splitHoverText.chars, {
@@ -2111,9 +2269,9 @@ function enquireHover() {
             },
           });
         }
-      });
+      };
 
-      button.addEventListener("mouseleave", function (event) {
+      const mouseleaveHandler = function (event) {
         let originalText = this.getAttribute("data-text-original");
 
         if (this.classList.contains("is-hover")) {
@@ -2127,7 +2285,16 @@ function enquireHover() {
           });
           this.classList.remove("is-hover");
         }
-      });
+      };
+
+      button.addEventListener("mouseenter", mouseenterHandler);
+      button.addEventListener("mouseleave", mouseleaveHandler);
+
+      // Store these listeners for cleanup
+      objectsEventListeners.push(
+        { element: button, event: "mouseenter", handler: mouseenterHandler },
+        { element: button, event: "mouseleave", handler: mouseleaveHandler }
+      );
     });
   }
 }
@@ -2147,7 +2314,12 @@ function objectsSwiper() {
       },
       on: {
         init: function () {
-          let slidesInView = [this.slides[0], this.slides[1], this.slides[2], this.slides[3]];
+          let slidesInView = [
+            this.slides[0],
+            this.slides[1],
+            this.slides[2],
+            this.slides[3],
+          ];
 
           gsap.to(slidesInView, {
             autoAlpha: 1,
@@ -2214,7 +2386,7 @@ function objectsEnquire() {
       let availability = button.textContent;
 
       if (availability == "Enquire") {
-        button.addEventListener("click", function () {
+        const clickHandler = function () {
           document.querySelector(".objects-enquire").classList.add("active");
 
           gsap.fromTo(
@@ -2238,20 +2410,28 @@ function objectsEnquire() {
           );
 
           navigator.clipboard.writeText(emailToCopy);
-        });
+        };
+
+        button.addEventListener("click", clickHandler);
+        objectsEventListeners.push({ element: button, event: "click", handler: clickHandler });
       }
     });
 
     document.querySelectorAll(".enquire-close").forEach(function (button) {
-      button.addEventListener("click", function () {
+      const closeHandler = function () {
         this.closest(".objects-enquire").classList.remove("active");
-      });
+      };
+
+      button.addEventListener("click", closeHandler);
+      objectsEventListeners.push({ element: button, event: "click", handler: closeHandler });
     });
   }
 }
 
 function objectsDownload() {
-  let downloadButtons = document.querySelectorAll(".objects-single_download-btn");
+  let downloadButtons = document.querySelectorAll(
+    ".objects-single_download-btn"
+  );
 
   downloadButtons.forEach(function (el) {
     let currentUrl = el.getAttribute("href");
@@ -2309,12 +2489,18 @@ function aboutIndexes() {
     const aboutIndexesSections = document.querySelectorAll(".about-three-col"); // Replace with the class that identifies your sections
 
     aboutIndexesSections.forEach((section) => {
-      let indexCode = section.querySelector("[data-index]").getAttribute("data-index");
-      let sectionContainer = document.querySelector(`[data-index=${CSS.escape(indexCode)}]`);
+      let indexCode = section
+        .querySelector("[data-index]")
+        .getAttribute("data-index");
+      let sectionContainer = document.querySelector(
+        `[data-index=${CSS.escape(indexCode)}]`
+      );
 
       const indexes = section.querySelectorAll(".about-three-col__link");
       const allAssets = section.querySelectorAll(".about-three-col__assets"); //get all images/videos
-      const assetContainer = section.querySelector(".about-three-col__asset-wrapper"); //get the wrapper for the asset
+      const assetContainer = section.querySelector(
+        ".about-three-col__asset-wrapper"
+      ); //get the wrapper for the asset
       let isVideoPlaying = false;
 
       //opacity animation for the asset container
@@ -2329,7 +2515,9 @@ function aboutIndexes() {
             firstMouseMove = false;
           }
 
-          assetContainer.style.transform = `translate(${e.clientX + 20}px, ${e.clientY + 20}px)`;
+          assetContainer.style.transform = `translate(${e.clientX + 20}px, ${
+            e.clientY + 20
+          }px)`;
         });
 
         gsap.to(assetContainer, {
@@ -2489,7 +2677,9 @@ function searchEnter() {
     }, 600);
 
     /* change behavior of search icon*/
-    document.querySelector(".navbar__search").addEventListener("click", searchIconHandler);
+    document
+      .querySelector(".navbar__search")
+      .addEventListener("click", searchIconHandler);
   }, 800);
 }
 
@@ -2570,7 +2760,9 @@ function search() {
     });
 
     // check if there are results
-    let searched = document.querySelector(".search").classList.contains("searched"),
+    let searched = document
+        .querySelector(".search")
+        .classList.contains("searched"),
       projectsCount = projectResults.querySelectorAll(
         '.search-result-col[data-visibility="visible"]'
       ).length, //quantos projetos fizeram match?
@@ -2649,23 +2841,32 @@ function search() {
     }
 
     // Show empty state if no results in any category
-    if (searched && projectsCount == 0 && objectsCount == 0 && artworksCount == 0) {
+    if (
+      searched &&
+      projectsCount == 0 &&
+      objectsCount == 0 &&
+      artworksCount == 0
+    ) {
       animateEmpty();
     }
   }
 
   // reset button
-  document.querySelector(".search-reset").addEventListener("click", function () {
-    resetSearch();
-    window.history.back();
-  });
+  document
+    .querySelector(".search-reset")
+    .addEventListener("click", function () {
+      resetSearch();
+      window.history.back();
+    });
 
   // empty animation
   function animateEmpty() {
     gsap.to(".search-empty", { autoAlpha: 1 });
 
     let emptyTl = gsap.timeline(),
-      emptyResults = new SplitText(".search-empty__results", { type: "words,chars" }),
+      emptyResults = new SplitText(".search-empty__results", {
+        type: "words,chars",
+      }),
       emptyText = new SplitText(".search-empty__span", { type: "words" }),
       chars = emptyResults.chars,
       words = emptyText.words;
@@ -2692,7 +2893,9 @@ function search() {
     document.querySelector(".search").classList.remove("searched");
     gsap.to(".search-empty", { autoAlpha: 0, duration: 0.2 });
 
-    let activeElements = document.querySelectorAll('.search-result-col[data-visibility="visible"]');
+    let activeElements = document.querySelectorAll(
+      '.search-result-col[data-visibility="visible"]'
+    );
 
     activeElements.forEach((el) => {
       gsap.to(el, {
@@ -2749,7 +2952,9 @@ function errorPage() {
   errorSlug.textContent = window.location.href;
 
   let errorTl = gsap.timeline(),
-    errorLines = document.querySelectorAll(".error-info [data-animation=stagger]");
+    errorLines = document.querySelectorAll(
+      ".error-info [data-animation=stagger]"
+    );
 
   gsap.set(".error-info", { opacity: 1 });
 
@@ -2774,86 +2979,100 @@ function artworksSetInitialState() {
 }
 
 function artworksFitText() {
-  const h1 = document.querySelector("h1");
-  const container = document.querySelector("#container");
+  console.log("artworksFitText called");
+  // Add a delay to ensure DOM is ready after Barba transition and cleanup
+  setTimeout(() => {
+    console.log("artworksFitText executing after delay");
+    const h1 = document.querySelector("h1");
+    const container = document.querySelector("#container");
 
-  if (h1 && container) {
-    // Hide text during fitting
-    gsap.set(h1, { autoAlpha: 0 });
+    if (h1 && container) {
+      console.log("Found h1 and container elements");
+      // Force text into one line
+      h1.style.whiteSpace = "nowrap";
 
-    let fontSize = 0;
-    h1.style.fontSize = fontSize + "px";
-    let containerWidth = container.offsetWidth;
-    let textWidth = h1.offsetWidth;
+      // Hide text during fitting
+      gsap.set(h1, { autoAlpha: 0 });
 
-    let iterations = 0;
-    while (textWidth < containerWidth && fontSize < 1000) {
-      fontSize += 4;
+      let fontSize = 0;
       h1.style.fontSize = fontSize + "px";
-      textWidth = h1.offsetWidth;
-      iterations++;
-    }
-    fontSize -= 4;
-    h1.style.fontSize = fontSize + "px";
 
-    // Show text after fitting with consistent transition
-    gsap.to(h1, {
-      autoAlpha: 1,
-      duration: 0.6,
-      ease: "blinking-line",
-    });
-  }
+      const containerWidth = container.offsetWidth;
+      let textWidth = h1.offsetWidth;
+
+      // Grow until it overflows
+      while (textWidth < containerWidth && fontSize < 1000) {
+        fontSize += 4;
+        h1.style.fontSize = fontSize + "px";
+        textWidth = h1.offsetWidth;
+      }
+
+      // Step back one increment so it fits
+      fontSize -= 4;
+      h1.style.fontSize = fontSize + "px";
+
+      // Show text after fitting
+      gsap.to(h1, {
+        autoAlpha: 1,
+        duration: 0.6,
+        ease: "blinking-line",
+      });
+    }
+  }, 300); // Delay to ensure DOM is ready after transition and cleanup
 }
 
-function artworksFadeIn() {
-  const elements = document.querySelectorAll("[data-fade-in]");
-  console.log("artworksFadeIn: found", elements.length, "elements");
+function artworksContentFadeIn() {
+  gsap.to('.artworks-content', {
+    autoAlpha: 1,
+    duration: 1,
+    ease: "power4",
+  });
+}
 
-  // Test: Animate first element immediately to see if GSAP works
+function firstArtworkFadeIn() {
+  const elements = document.querySelectorAll("[data-fade-in]");
+
+  // Load the first element immediately
   if (elements.length > 0) {
-    console.log("TEST: Animating first element immediately");
     gsap.to(elements[0], {
       autoAlpha: 1,
       y: 0,
       duration: 1,
       ease: "power4",
-      delay: 2, // 2 second delay to see it happen
-    });
-  }
-
-  elements.forEach((el, index) => {
-    console.log("Element", index, ":", el, "- Current styles:", {
-      opacity: getComputedStyle(el).opacity,
-      transform: getComputedStyle(el).transform,
-      visibility: getComputedStyle(el).visibility,
-    });
-
-    // Skip first element since we're testing it above
-    if (index === 0) return;
-
-    gsap.to(el, {
-      autoAlpha: 1,
-      y: 0,
-      duration: 0.8,
-      ease: "power4",
-      scrollTrigger: {
-        trigger: el,
-        start: "top bottom", // More aggressive trigger
-        onEnter: () => {
-          console.log("ScrollTrigger ENTERED for element", index, ":", el);
-        },
-        onEnterBack: () => {
-          console.log("ScrollTrigger ENTER BACK for element", index, ":", el);
-        },
-        onRefresh: () => {
-          console.log("ScrollTrigger REFRESHED for element", index, ":", el);
-        },
+      delay: 0.5,
+      before: function () {
+        let artworksContent = document.querySelector(".artworks-content");
+        if (artworksContent) {
+          artworksContent.style.opacity = "1";
+        }
       },
     });
-  });
+  }
+}
 
-  console.log("ScrollTrigger.refresh() called");
-  ScrollTrigger.refresh();
+function artworksFadeIn() {
+  setTimeout(() => {
+    //wait for the barbajs finish the transition
+    const elements = document.querySelectorAll("[data-fade-in]");
+
+    elements.forEach((el, index) => {
+      // Skip first element
+      if (index === 0) return;
+  
+      gsap.to(el, {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.8,
+        ease: "power4",
+        scrollTrigger: {
+          trigger: el,
+          start: "top bottom",
+        },
+      });
+    });
+  
+    ScrollTrigger.refresh();
+  }, 1000);
 }
 
 function artworksMarquee() {
