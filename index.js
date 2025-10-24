@@ -51,9 +51,8 @@ function debounce(func, delay) {
 //the indiviual resize is being checked on afterEnter of each page, so i don't call the script in the wrong page
 
 /* register the gsap plugins */
-gsap.registerPlugin(ScrollTrigger);
-gsap.registerPlugin(SplitText);
-gsap.registerPlugin(CustomEase);
+gsap.registerPlugin(Draggable,InertiaPlugin,ScrollTrigger,SplitText,CustomEase)
+
 
 CustomEase.create("asset-index", "0,0,0,1");
 CustomEase.create("blinking-line", ".25, 0, .15, 1");
@@ -179,12 +178,12 @@ barba.init({
     {
       namespace: "objects",
       beforeEnter() {
-        iframePoster();
         objectsHeroDesktop();
         objectsHeroLines();
         objectsIndex();
         enquireHover();
         objectsEnquire();
+        iframePoster();
       },
       afterEnter() {
         objectsEnquire();
@@ -928,6 +927,9 @@ function customCursors() {
       if (window.getComputedStyle(element).cursor === "pointer") {
         isPointer = true;
         cursors.style.opacity = "0";
+      } else if (window.getComputedStyle(element).cursor === "grab") {
+        isPointer = true;
+        cursors.style.opacity = "0";
       } else if (!isPointer) {
         cursors.style.opacity = "1";
       }
@@ -1006,27 +1008,29 @@ function customCursors() {
 }
 
 function iframePoster() {
-  document
-    .querySelectorAll("[data-vimeo-poster='true']")
-    .forEach(function (componentEl) {
-      const iframeEl = componentEl.querySelector("iframe");
+  setTimeout(function () {
+    document
+      .querySelectorAll("[data-vimeo-poster='true']")
+      .forEach(function (componentEl) {
+        const iframeEl = componentEl.querySelector("iframe");
 
-      if (!componentEl.classList.contains("w-condition-invisible")) {
-        if (
-          iframeEl.hasAttribute("data-src") &&
-          !iframeEl.hasAttribute("src")
-        ) {
-          let dataSrc = iframeEl.getAttribute("data-src");
-          iframeEl.setAttribute("src", dataSrc);
+        if (!componentEl.classList.contains("w-condition-invisible")) {
+          if (
+            iframeEl.hasAttribute("data-src") &&
+            !iframeEl.hasAttribute("src")
+          ) {
+            let dataSrc = iframeEl.getAttribute("data-src");
+            iframeEl.setAttribute("src", dataSrc);
+          }
         }
-      }
 
-      let player = new Vimeo.Player(iframeEl);
+        let player = new Vimeo.Player(iframeEl);
 
-      player.on("play", function () {
-        iframeEl.style.opacity = 1;
+        player.on("play", function () {
+          iframeEl.style.opacity = 1;
+        });
       });
-    });
+  }, 300);
 }
 
 function currentYear() {
@@ -1131,6 +1135,8 @@ let homepageHeroSplitLines;
 function homepageHeroLines() {
   const homepageHeroText = document.querySelector(".hero__clients-collection");
 
+  homepageHeroText.style.pointerEvents = "none";
+
   if (window.matchMedia("(min-width: 992px)").matches) {
     gsap.set(homepageHeroText, { opacity: 1 });
 
@@ -1151,6 +1157,8 @@ function homepageHeroLines() {
       ease: "splitLines",
       onComplete() {
         gsap.set(homepageHeroSplitLines.lines, { clearProps: "all" });
+        homepageHeroText.classList.add("animated");
+        homepageHeroText.style.pointerEvents = "auto";
       },
     });
   } else {
@@ -1167,6 +1175,7 @@ function homepageHeroLines() {
         ease: "splitLines",
         onComplete: function () {
           homepageHeroText.classList.add("animated");
+          homepageHeroText.style.pointerEvents = "auto";
         },
       });
     }
@@ -1174,6 +1183,8 @@ function homepageHeroLines() {
 }
 
 function homepageHeroDesktop() {
+  const homepageHeroText = document.querySelector(".hero__clients-collection");
+
   if (window.matchMedia("(min-width: 992px)").matches) {
     //the hover effect to not trigger the "sensitive" area with css
     $(".hero__client-link").hover(
@@ -1213,6 +1224,10 @@ function homepageHeroDesktop() {
       }
 
       el.addEventListener("mouseover", () => {
+        if(!homepageHeroText.classList.contains("animated")) {
+          return;
+        }
+
         isMouseOver = true;
         checkMouseOver();
       });
@@ -1663,46 +1678,235 @@ function videoComponent() {
         "[js-vimeo-element='media']"
       );
       const timeline = componentEl.querySelector(".proj-video-timeline");
+      timeline.remove();
 
-      iframeEl.setAttribute(
-        "src",
-        iframeEl.getAttribute("src") + "&playsinline=0"
-      );
+      let currentSrc = iframeEl.getAttribute("src");
+      if (!currentSrc.includes("?")) {
+        currentSrc += "?";
+      } else if (!currentSrc.endsWith("&")) {
+        currentSrc += "&";
+      }
+      currentSrc += "playsinline=0&autopause=0";
+      iframeEl.setAttribute("src", currentSrc);
 
       let player = new Vimeo.Player(iframeEl);
-
+      
+      // Disable loop so the 'ended' event fires
+      player.setLoop(false);
+      
       player.on("play", function () {
         componentEl.classList.add("is-playing");
       });
-
       player.on("pause", function () {
         componentEl.classList.remove("is-playing");
-        coverEl.style.cssText = "opacity: 1;";
+      });
+      player.on("ended", function () {
+        componentEl.classList.remove("is-playing");
+        coverEl.style.cssText = "opacity: 1; pointer-events: auto;";
+        coverImage.style.cssText = "opacity: 1; pointer-events: auto;";
+        playButton.innerHTML = "Play";
+        playButton.classList.remove("is-playing");
+        player.setCurrentTime(0);
       });
 
-      coverEl.addEventListener("click", function () {
-        // when clicking the cover
-        coverEl.style.cssText = "opacity: 0;";
-        coverImage.style.cssText = "opacity: 0";
+      let controlBackground = document.createElement("div");
+      controlBackground.classList.add("proj-video-controls__background");
+      componentEl.appendChild(controlBackground);
 
+      controlBackground.addEventListener("click", function () {
+        playButton.click();
+      });
+
+      let controls = document.createElement("div");
+      controls.classList.add("proj-video-controls");
+
+      let volume = document.createElement("div");
+      volume.classList.add("proj-video-controls__volume");
+      controls.appendChild(volume);
+      
+      let muteButton = document.createElement("button");
+      muteButton.classList.add("proj-video-controls__mute");
+      muteButton.innerHTML = "Mute";
+      volume.appendChild(muteButton);
+
+      let volumeBar = document.createElement("div");
+      volumeBar.classList.add("proj-video-controls__volume-bar");
+      volume.appendChild(volumeBar);
+
+      let volumeBarFill = document.createElement("div");
+      volumeBarFill.classList.add("proj-video-controls__volume-bar-fill");
+      volumeBar.appendChild(volumeBarFill);
+
+      let progressBar = document.createElement("div");
+      progressBar.classList.add("proj-video-controls__progress-bar");
+      controls.appendChild(progressBar);
+
+      let progressBarFill = document.createElement("div");
+      progressBarFill.classList.add("proj-video-controls__progress-bar-fill");
+      progressBar.appendChild(progressBarFill);
+
+      let playButton = document.createElement("button");
+      playButton.classList.add("proj-video-controls__play");
+      playButton.innerHTML = "Play";
+      progressBar.appendChild(playButton);
+
+      let time = document.createElement("div");
+      time.classList.add("proj-video-controls__time");
+      progressBar.appendChild(time);
+
+      let timeElapsed = document.createElement("div");
+      timeElapsed.classList.add("proj-video-controls__time-elapsed");
+      timeElapsed.innerHTML = "0:00";
+      time.appendChild(timeElapsed);
+      
+      let totalTime = document.createElement("div");
+      totalTime.classList.add("proj-video-controls__time-total");
+      totalTime.innerHTML = "0:00";
+      time.appendChild(totalTime);
+
+      componentEl.appendChild(controls);
+
+      // prevent time display from triggering seek
+      time.addEventListener("click", function (event) {
+        event.stopPropagation();
+      });
+
+      componentEl.addEventListener("mouseenter", () => {
+        controls.classList.add("is-visible");
+      });
+
+      componentEl.addEventListener("mouseleave", () => {
+        controls.classList.remove("is-visible");
+      });
+
+      playButton.addEventListener("click", function (event) {
+        event.stopPropagation();
+        event.preventDefault();
         if (componentEl.classList.contains("is-playing")) {
           player.pause();
+          playButton.innerHTML = "Play";
+          playButton.classList.remove("is-playing");
         } else {
           player.play();
+          playButton.innerHTML = "Pause";
+          playButton.classList.add("is-playing");
         }
+      });
+
+      // when clicking the cover play the video
+      coverEl.addEventListener("click", function () {
+        coverEl.style.cssText = "opacity: 0;";
+        coverImage.style.cssText = "opacity: 0";
+        coverEl.style.pointerEvents = "none";
+        coverImage.style.pointerEvents = "none";
+
+        player.play();
+        playButton.innerHTML = "Pause";
+        playButton.classList.add("is-playing");
       });
 
       // update timeline
       player.getDuration().then(function (duration) {
         setInterval(updateTimelineBar, 100, duration);
+
+        totalTime.innerHTML = formatTime(duration);
+
+        // make progress bar clickable to seek
+        progressBar.addEventListener("click", function (event) {
+          event.stopPropagation();
+          event.preventDefault();
+          const rect = progressBar.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const progress = x / rect.width;
+          const newTime = progress * duration;
+          player.setCurrentTime(newTime);
+        });
       });
 
       function updateTimelineBar(duration) {
         player.getCurrentTime().then(function (time) {
           var progress = (time / duration) * 100;
-          timeline.style.width = progress + "%";
+          progressBarFill.style.width = progress + "%";
+          timeElapsed.innerHTML = formatTime(time);
+          totalTime.innerHTML = formatTime(duration);
         });
       }
+
+      function formatTime(time) {
+        const minutes = Math.floor(time / 60);
+        const seconds = Math.floor(time % 60);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      function updateVolumeClasses(volume) {
+        if (volume > 0.75) {
+          muteButton.classList.remove("is-medium", "is-low");
+        } else if (volume >= 0.25) {
+          muteButton.classList.add("is-medium");
+          muteButton.classList.remove("is-low");
+        } else {
+          muteButton.classList.add("is-low");
+          muteButton.classList.remove("is-medium");
+        }
+      }
+
+      muteButton.addEventListener("click", function () {
+        if (muteButton.classList.contains("is-muted")) {
+          player.setVolume(1);
+          muteButton.classList.remove("is-muted");
+          volumeBar.classList.add("is-active");
+          volumeBarFill.style.height = "100%";
+          updateVolumeClasses(1);
+        } else {
+          player.setVolume(0);
+          muteButton.classList.add("is-muted");
+          volumeBar.classList.remove("is-active");
+          volumeBarFill.style.height = "0%";
+          updateVolumeClasses(0);
+        }
+      });
+
+      player.getVolume().then(function (volume) {
+        if(volume === 0) {
+          muteButton.classList.add("is-muted");
+          volumeBar.classList.remove("is-active");
+        }
+        volumeBarFill.style.height = volume * 100 + "%";
+        updateVolumeClasses(volume);
+      });
+
+      volume.addEventListener("mouseenter", function () {
+        if(!muteButton.classList.contains("is-muted")) {
+          volumeBar.classList.add("is-active");
+        }
+      });
+
+      volume.addEventListener("mouseleave", function () {
+        if(!muteButton.classList.contains("is-muted")) {  
+          volumeBar.classList.remove("is-active");
+        }
+      });
+
+      volumeBar.addEventListener("click", function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+        const rect = volumeBar.getBoundingClientRect();
+        const y = event.clientY - rect.top;
+        const volume = 1 - (y / rect.height);
+
+        volumeBarFill.style.height = volume * 100 + "%";
+
+        player.setVolume(volume);
+        
+        if (volume === 0) {
+          muteButton.classList.add("is-muted");
+          volumeBar.classList.remove("is-active");
+        } else {
+          muteButton.classList.remove("is-muted");
+        }
+        
+        updateVolumeClasses(volume);
+      });
     });
 }
 
@@ -2979,15 +3183,12 @@ function artworksSetInitialState() {
 }
 
 function artworksFitText() {
-  console.log("artworksFitText called");
   // Add a delay to ensure DOM is ready after Barba transition and cleanup
   setTimeout(() => {
-    console.log("artworksFitText executing after delay");
     const h1 = document.querySelector("h1");
     const container = document.querySelector("#container");
 
     if (h1 && container) {
-      console.log("Found h1 and container elements");
       // Force text into one line
       h1.style.whiteSpace = "nowrap";
 
@@ -3018,7 +3219,7 @@ function artworksFitText() {
         ease: "blinking-line",
       });
     }
-  }, 300); // Delay to ensure DOM is ready after transition and cleanup
+  }, 500); // Delay to ensure DOM is ready after transition and cleanup
 }
 
 function artworksContentFadeIn() {
@@ -3076,12 +3277,20 @@ function artworksFadeIn() {
 }
 
 function artworksMarquee() {
+  const wrap = gsap.utils.wrap(0, 1);
+  
   // Reset and clean existing marquees for Barba transitions
   document.querySelectorAll(".marquee-wrapper").forEach((wrapper) => {
     // Kill existing animation if it exists
     if (wrapper.animation) {
       wrapper.animation.kill();
       wrapper.animation = null;
+    }
+
+    // Kill existing draggable if it exists
+    if (wrapper.draggable) {
+      wrapper.draggable.kill();
+      wrapper.draggable = null;
     }
 
     // Remove cloned marquees (keep only the first one)
@@ -3103,25 +3312,57 @@ function artworksMarquee() {
   // Get all marquees
   const wrappers = gsap.utils.toArray(".marquee-wrapper");
 
-  // Create timelines for each marquee
+  // Create animation and draggable for each marquee
   wrappers.forEach((wrapper) => {
-    const marquee = wrapper.querySelector(".marquee");
-    const clone = wrapper.querySelectorAll(".marquee")[1];
-    const width = marquee.offsetWidth;
+    const marquees = wrapper.querySelectorAll(".marquee");
+    const marquee = marquees[0];
+    const clone = marquees[1];
+    const marqueeWidth = marquee.offsetWidth;
+    
+    // Store state
+    wrapper.isInView = false;
+    let totalDistance = marqueeWidth;
 
-    const tl = gsap.timeline({
-      repeat: -1,
-      paused: true, // Start paused
-    });
-
-    tl.to([marquee, clone], {
-      x: `-${width}px`,
+    // Create the animation - animate both marquee elements
+    const anim = gsap.to([marquee, clone], {
+      x: -totalDistance,
       duration: 70,
       ease: "none",
+      repeat: -1,
+      paused: true
     });
 
-    // Store the timeline on the element for the batch to access
-    wrapper.animation = tl;
+    // Store the animation on the element
+    wrapper.animation = anim;
+
+    // Create a container div to make draggable (proxy element)
+    let proxy = document.createElement("div");
+    let startPos;
+    
+    wrapper.draggable = Draggable.create(proxy, {
+      type: "x",
+      trigger: wrapper,
+      inertia: true,
+      throwResistance: 200,
+      onPressInit: function() {
+        anim.pause();
+        startPos = this.x;
+      },
+      onDrag: function() {
+        let prog = wrap(-this.x / totalDistance);
+        anim.progress(prog);
+      },
+      onThrowUpdate: function() {
+        let prog = wrap(-this.x / totalDistance);
+        anim.progress(prog);
+      },
+      onThrowComplete: function() {
+        if (wrapper.isInView) {
+          anim.play();
+          gsap.fromTo(anim, { timeScale: 0 }, { duration: 2, timeScale: 1, ease: "power1.in" });
+        }
+      }
+    })[0];
   });
 
   // Use batch to create ScrollTriggers for each wrapper
@@ -3129,16 +3370,36 @@ function artworksMarquee() {
     start: "top bottom",
     end: "bottom top",
     onEnter: (batch) => {
-      batch.forEach((wrapper) => wrapper.animation.play());
+      batch.forEach((wrapper) => {
+        wrapper.isInView = true;
+        if (wrapper.animation) {
+          wrapper.animation.play();
+        }
+      });
     },
     onLeave: (batch) => {
-      batch.forEach((wrapper) => wrapper.animation.pause());
+      batch.forEach((wrapper) => {
+        wrapper.isInView = false;
+        if (wrapper.animation) {
+          wrapper.animation.pause();
+        }
+      });
     },
     onEnterBack: (batch) => {
-      batch.forEach((wrapper) => wrapper.animation.play());
+      batch.forEach((wrapper) => {
+        wrapper.isInView = true;
+        if (wrapper.animation) {
+          wrapper.animation.play();
+        }
+      });
     },
     onLeaveBack: (batch) => {
-      batch.forEach((wrapper) => wrapper.animation.pause());
+      batch.forEach((wrapper) => {
+        wrapper.isInView = false;
+        if (wrapper.animation) {
+          wrapper.animation.pause();
+        }
+      });
     },
   });
 }
