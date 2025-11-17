@@ -1672,13 +1672,16 @@ function videoComponent() {
   document
     .querySelectorAll("[js-vimeo-element='component']")
     .forEach(function (componentEl) {
+
       const iframeEl = componentEl.querySelector("iframe");
       const coverEl = componentEl.querySelector("[js-vimeo-element='cover']");
       const coverImage = componentEl.querySelector(
         "[js-vimeo-element='media']"
       );
       const timeline = componentEl.querySelector(".proj-video-timeline");
-      timeline.remove();
+      if(timeline) {
+        timeline.remove();
+      }
 
       let currentSrc = iframeEl.getAttribute("src");
       if (!currentSrc.includes("?")) {
