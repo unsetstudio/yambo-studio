@@ -126,6 +126,7 @@
     gap: 4px;
     padding: 0 8px;
     pointer-events: none;
+    font-size: 18px;
 }
 
 .proj-video-controls__time-elapsed {

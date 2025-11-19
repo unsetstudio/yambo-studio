@@ -276,10 +276,11 @@ barba.init({
         iframePoster();
         aboutIndexes();
         locationHover();
-        aboutSectionsHover(); //only for the 2 cols
       },
       afterEnter() {
         aboutVideo();
+        aboutSectionsHover(); //only for the 2 cols
+
 
         //flag resize
         function aboutResize() {
@@ -1770,6 +1771,10 @@ function videoComponent() {
       componentEl.appendChild(controls);
 
       // prevent time display from triggering seek
+      time.addEventListener("mousedown", function (event) {
+        event.stopPropagation();
+      });
+      
       time.addEventListener("click", function (event) {
         event.stopPropagation();
       });
@@ -1782,6 +1787,11 @@ function videoComponent() {
         controls.classList.remove("is-visible");
       });
 
+      // Prevent mousedown on playButton from triggering progress bar drag
+      playButton.addEventListener("mousedown", function (event) {
+        event.stopPropagation();
+      });
+      
       playButton.addEventListener("click", function (event) {
         event.stopPropagation();
         event.preventDefault();
@@ -1814,15 +1824,37 @@ function videoComponent() {
 
         totalTime.innerHTML = formatTime(duration);
 
-        // make progress bar clickable to seek
-        progressBar.addEventListener("click", function (event) {
-          event.stopPropagation();
-          event.preventDefault();
+        // make progress bar clickable and draggable to seek
+        let isDraggingProgress = false;
+        
+        function updateProgress(event) {
           const rect = progressBar.getBoundingClientRect();
-          const x = event.clientX - rect.left;
+          const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
           const progress = x / rect.width;
           const newTime = progress * duration;
           player.setCurrentTime(newTime);
+        }
+        
+        progressBar.addEventListener("mousedown", function (event) {
+          event.stopPropagation();
+          event.preventDefault();
+          isDraggingProgress = true;
+          updateProgress(event);
+          
+          function onMouseMove(e) {
+            if (isDraggingProgress) {
+              updateProgress(e);
+            }
+          }
+          
+          function onMouseUp() {
+            isDraggingProgress = false;
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+          }
+          
+          document.addEventListener("mousemove", onMouseMove);
+          document.addEventListener("mouseup", onMouseUp);
         });
       });
 
@@ -1890,12 +1922,13 @@ function videoComponent() {
         }
       });
 
-      volumeBar.addEventListener("click", function (event) {
-        event.stopPropagation();
-        event.preventDefault();
+      // make volume bar clickable and draggable
+      let isDraggingVolume = false;
+      
+      function updateVolumeFromEvent(event) {
         const rect = volumeBar.getBoundingClientRect();
-        const y = event.clientY - rect.top;
-        const volume = 1 - (y / rect.height);
+        const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height));
+        const volume = Math.max(0, Math.min(1, 1 - (y / rect.height)));
 
         volumeBarFill.style.height = volume * 100 + "%";
 
@@ -1909,6 +1942,28 @@ function videoComponent() {
         }
         
         updateVolumeClasses(volume);
+      }
+      
+      volumeBar.addEventListener("mousedown", function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+        isDraggingVolume = true;
+        updateVolumeFromEvent(event);
+        
+        function onMouseMove(e) {
+          if (isDraggingVolume) {
+            updateVolumeFromEvent(e);
+          }
+        }
+        
+        function onMouseUp() {
+          isDraggingVolume = false;
+          document.removeEventListener("mousemove", onMouseMove);
+          document.removeEventListener("mouseup", onMouseUp);
+        }
+        
+        document.addEventListener("mousemove", onMouseMove);
+        document.addEventListener("mouseup", onMouseUp);
       });
     });
 }
@@ -3346,10 +3401,15 @@ function artworksMarquee() {
       type: "x",
       trigger: wrapper,
       inertia: true,
-      throwResistance: 200,
+      throwResistance: 500, // Increased from 200 to reduce throw distance
+      maxDuration: 1, // Limit maximum throw duration to 1 second
+      minDuration: 0.2, // Minimum throw duration
+      dragResistance: 0.3, // Add resistance to make dragging feel more controlled (0-1, lower = more resistance)
+      bounds: { minX: -totalDistance * 2, maxX: totalDistance * 2 }, // Limit drag range
       onPressInit: function() {
         anim.pause();
         startPos = this.x;
+        gsap.killTweensOf(anim); // Kill any timeScale tweens
       },
       onDrag: function() {
         let prog = wrap(-this.x / totalDistance);
@@ -3362,7 +3422,8 @@ function artworksMarquee() {
       onThrowComplete: function() {
         if (wrapper.isInView) {
           anim.play();
-          gsap.fromTo(anim, { timeScale: 0 }, { duration: 2, timeScale: 1, ease: "power1.in" });
+          // Smoother resume with shorter duration and easier ease
+          gsap.fromTo(anim, { timeScale: 0 }, { duration: 1, timeScale: 1, ease: "power2.out" });
         }
       }
     })[0];
