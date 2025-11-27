@@ -123,10 +123,12 @@
     bottom: 0;
     height: 32px;
     display: flex;
+    align-items: center;
+    justify-content: flex-end;
     gap: 4px;
     padding: 0 8px;
     pointer-events: none;
-    font-size: 18px;
+    font-size: 16px;
 }
 
 .proj-video-controls__time-elapsed {
@@ -141,4 +143,8 @@
 .proj-video-controls__time-total::before {
     content: "/";
     margin-right: 4px;
+}
+
+.proj-image, .video_vimeo, .video_cover {
+    transform: scale(1.01);
 }

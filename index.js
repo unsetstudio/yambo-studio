@@ -1916,14 +1916,14 @@ function videoComponent() {
         }
       });
 
+      // make volume bar clickable and draggable
+      let isDraggingVolume = false;
+
       volume.addEventListener("mouseleave", function () {
-        if(!muteButton.classList.contains("is-muted")) {  
+        if(!muteButton.classList.contains("is-muted") && !isDraggingVolume) {  
           volumeBar.classList.remove("is-active");
         }
       });
-
-      // make volume bar clickable and draggable
-      let isDraggingVolume = false;
       
       function updateVolumeFromEvent(event) {
         const rect = volumeBar.getBoundingClientRect();
@@ -3405,7 +3405,6 @@ function artworksMarquee() {
       maxDuration: 1, // Limit maximum throw duration to 1 second
       minDuration: 0.2, // Minimum throw duration
       dragResistance: 0.3, // Add resistance to make dragging feel more controlled (0-1, lower = more resistance)
-      bounds: { minX: -totalDistance * 2, maxX: totalDistance * 2 }, // Limit drag range
       onPressInit: function() {
         anim.pause();
         startPos = this.x;
@@ -3418,8 +3417,22 @@ function artworksMarquee() {
       onThrowUpdate: function() {
         let prog = wrap(-this.x / totalDistance);
         anim.progress(prog);
+        
+        // Reset proxy position when it gets too far from center to prevent accumulation
+        if (Math.abs(this.x) > totalDistance) {
+          let currentProgress = anim.progress();
+          this.x = this.x % totalDistance;
+          gsap.set(proxy, { x: this.x });
+          anim.progress(currentProgress);
+        }
       },
       onThrowComplete: function() {
+        // Reset proxy position to prevent accumulation over multiple drags
+        let currentProgress = anim.progress();
+        this.x = 0;
+        gsap.set(proxy, { x: 0 });
+        anim.progress(currentProgress);
+        
         if (wrapper.isInView) {
           anim.play();
           // Smoother resume with shorter duration and easier ease
