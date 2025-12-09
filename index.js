@@ -705,6 +705,10 @@ function resetWebflow(data) {
     window.Webflow.ready();
     window.Webflow.require("ix2").init();
   }
+  if (window.FsAttributes) {
+    window.FsAttributes.destroy();
+    window.FsAttributes.copyclip.init();
+  }
 }
 
 /* Logo interaction */
