@@ -3370,140 +3370,173 @@ function artworksMarquee() {
 
   wrappers.forEach((wrapper) => {
     const marquee = wrapper.querySelector(".marquee");
-    const style = window.getComputedStyle(marquee);
-    const marginRight = parseFloat(style.marginRight) || 0;
-    const marginLeft = parseFloat(style.marginLeft) || 0;
-    const wrapperStyle = window.getComputedStyle(wrapper);
-    const gap = parseFloat(wrapperStyle.gap) || 0;
-    const box = marquee.getBoundingClientRect();
-    const marqueeWidth = box.width;
-    
-    // Calculate full width of one item including spacing
-    let totalDistance = marqueeWidth + marginRight + marginLeft + gap;
-    
-    // Safety check
-    if (!totalDistance) return;
+    if (!marquee) return;
 
-    wrapper.isInView = false;
-
-    // Calculate how many clones we need to fill the screen + buffer
-    // Increased buffer to ensure fast swipes never run out of content
-    const clonesNeeded = Math.ceil(window.innerWidth / totalDistance) + 4;
-    
-    // Create clones
-    for (let i = 0; i < clonesNeeded; i++) {
-      wrapper.appendChild(marquee.cloneNode(true));
-    }
-
-    // Get all elements (original + clones)
-    const allMarquees = wrapper.querySelectorAll(".marquee");
-
-    // Create the animation - animate ALL marquee elements
-    // We still move by totalDistance (one item width) because that's when the pattern repeats
-    const anim = gsap.to(allMarquees, {
-      x: -totalDistance,
-      duration: 70,
-      ease: "none",
-      repeat: -1,
-      paused: true,
-      overwrite: "auto"
+    // Wait for images to load before calculating dimensions
+    const images = wrapper.querySelectorAll("img");
+    const imagePromises = Array.from(images).map((img) => {
+      if (img.complete) return Promise.resolve();
+      return new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
     });
 
-    // Store the animation on the element
-    wrapper.animation = anim;
+    Promise.all(imagePromises).then(() => {
+      const style = window.getComputedStyle(marquee);
+      const marginRight = parseFloat(style.marginRight) || 0;
+      const marginLeft = parseFloat(style.marginLeft) || 0;
+      const wrapperStyle = window.getComputedStyle(wrapper);
+      const gap = parseFloat(wrapperStyle.gap) || 0;
+      const box = marquee.getBoundingClientRect();
+      const marqueeWidth = box.width;
 
-    // Create a container div to make draggable (proxy element)
-    let proxy = document.createElement("div");
-    // Append to wrapper and style it to cover the area
-    wrapper.appendChild(proxy);
-    gsap.set(proxy, { 
-      position: "absolute", 
-      top: 0, 
-      left: 0, 
-      width: "100%", 
-      height: "100%", 
-      zIndex: 10,
-      opacity: 0 // Invisible but clickable
-    });
-    
-    wrapper.draggable = Draggable.create(proxy, {
-      type: "x",
-      trigger: wrapper,
-      inertia: true,
-      throwResistance: 2000,
-      maxDuration: 0.5,
-      dragResistance: 0.4,
-      onPressInit: function() {
-        anim.pause();
-        gsap.killTweensOf(anim);
-        anim.timeScale(1); // Reset timescale to normal in case it was tweening
+      // Calculate full width of one item including spacing
+      let totalDistance = marqueeWidth + marginRight + marginLeft + gap;
 
-        // Sync proxy position with current animation progress
-        let currentProgress = anim.progress();
-        let newX = -currentProgress * totalDistance;
-        
-        gsap.set(proxy, { x: newX });
-        this.update();
-      },
-      onDrag: function() {
-        let prog = wrap(-this.x / totalDistance);
-        anim.progress(prog);
-      },
-      onThrowUpdate: function() {
-        let prog = wrap(-this.x / totalDistance);
-        anim.progress(prog);
-      },
-      onThrowComplete: function() {
-        if (wrapper.isInView) {
-          anim.play();
-          // Smoother resume
-          gsap.fromTo(anim, { timeScale: 0 }, { duration: 1, timeScale: 1, ease: "power2.out" });
-        }
+      // Safety check
+      if (!totalDistance) return;
+
+      // Initialize isInView if not set
+      if (typeof wrapper.isInView === "undefined") {
+        wrapper.isInView = false;
       }
-    })[0];
-    
-    // Force overflow hidden to prevent native scroll limits
-    wrapper.style.overflow = "hidden";
-    
-    // Add wheel listener for trackpad/mousewheel support
-    wrapper.addEventListener("wheel", (e) => {
-      // Check if scroll is primarily horizontal
-      // distinct from vertical page scroll
-      const isHorizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
 
-      if (isHorizontal) {
-        e.preventDefault();
-        
-        // Calculate progress change based on scroll delta
-        const delta = e.deltaX;
-        const progressChange = delta / totalDistance;
-        
-        // Update animation progress
-        const currentProg = anim.progress();
-        const newProg = wrap(currentProg + progressChange);
-        
-        // Pause animation while scrolling manually
-        anim.pause();
-        anim.progress(newProg);
-        gsap.killTweensOf(anim);
-        
-        // Debounce resume
-        clearTimeout(wrapper.wheelTimeout);
-        wrapper.wheelTimeout = setTimeout(() => {
+      // Calculate how many clones we need to fill the screen + buffer
+      // Increased buffer to ensure fast swipes never run out of content
+      const clonesNeeded = Math.ceil(window.innerWidth / totalDistance) + 4;
+
+      // Create clones
+      for (let i = 0; i < clonesNeeded; i++) {
+        wrapper.appendChild(marquee.cloneNode(true));
+      }
+
+      // Get all elements (original + clones)
+      const allMarquees = wrapper.querySelectorAll(".marquee");
+
+      // Create the animation - animate ALL marquee elements
+      // We still move by totalDistance (one item width) because that's when the pattern repeats
+      const anim = gsap.to(allMarquees, {
+        x: -totalDistance,
+        duration: 70,
+        ease: "none",
+        repeat: -1,
+        paused: true,
+        overwrite: "auto",
+      });
+
+      // Store the animation on the element
+      wrapper.animation = anim;
+
+      // If ScrollTrigger already activated this wrapper, start playing
+      if (wrapper.isInView) {
+        anim.play();
+      }
+
+      // Create a container div to make draggable (proxy element)
+      let proxy = document.createElement("div");
+      // Append to wrapper and style it to cover the area
+      wrapper.appendChild(proxy);
+      gsap.set(proxy, {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 10,
+        opacity: 0, // Invisible but clickable
+      });
+
+      wrapper.draggable = Draggable.create(proxy, {
+        type: "x",
+        trigger: wrapper,
+        inertia: true,
+        throwResistance: 2000,
+        maxDuration: 0.5,
+        dragResistance: 0.4,
+        onPressInit: function () {
+          anim.pause();
+          gsap.killTweensOf(anim);
+          anim.timeScale(1); // Reset timescale to normal in case it was tweening
+
+          // Sync proxy position with current animation progress
+          let currentProgress = anim.progress();
+          let newX = -currentProgress * totalDistance;
+
+          gsap.set(proxy, { x: newX });
+          this.update();
+        },
+        onDrag: function () {
+          let prog = wrap(-this.x / totalDistance);
+          anim.progress(prog);
+        },
+        onThrowUpdate: function () {
+          let prog = wrap(-this.x / totalDistance);
+          anim.progress(prog);
+        },
+        onThrowComplete: function () {
           if (wrapper.isInView) {
-             anim.play();
-             gsap.fromTo(anim, { timeScale: 0 }, { duration: 1, timeScale: 1, ease: "power2.out" });
+            anim.play();
+            // Smoother resume
+            gsap.fromTo(
+              anim,
+              { timeScale: 0 },
+              { duration: 1, timeScale: 1, ease: "power2.out" }
+            );
           }
-        }, 100);
-        
-        // Update proxy to match new visual state
-        const newX = -newProg * totalDistance;
-        gsap.set(proxy, { x: newX });
-        wrapper.draggable.update();
-      }
-      // If vertical, do nothing and let event bubble for native page scroll
-      
-    }, { passive: false });
+        },
+      })[0];
+
+      // Force overflow hidden to prevent native scroll limits
+      wrapper.style.overflow = "hidden";
+
+      // Add wheel listener for trackpad/mousewheel support
+      wrapper.addEventListener(
+        "wheel",
+        (e) => {
+          // Check if scroll is primarily horizontal
+          // distinct from vertical page scroll
+          const isHorizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+
+          if (isHorizontal) {
+            e.preventDefault();
+
+            // Calculate progress change based on scroll delta
+            const delta = e.deltaX;
+            const progressChange = delta / totalDistance;
+
+            // Update animation progress
+            const currentProg = anim.progress();
+            const newProg = wrap(currentProg + progressChange);
+
+            // Pause animation while scrolling manually
+            anim.pause();
+            anim.progress(newProg);
+            gsap.killTweensOf(anim);
+
+            // Debounce resume
+            clearTimeout(wrapper.wheelTimeout);
+            wrapper.wheelTimeout = setTimeout(() => {
+              if (wrapper.isInView) {
+                anim.play();
+                gsap.fromTo(
+                  anim,
+                  { timeScale: 0 },
+                  { duration: 1, timeScale: 1, ease: "power2.out" }
+                );
+              }
+            }, 100);
+
+            // Update proxy to match new visual state
+            const newX = -newProg * totalDistance;
+            gsap.set(proxy, { x: newX });
+            wrapper.draggable.update();
+          }
+          // If vertical, do nothing and let event bubble for native page scroll
+        },
+        { passive: false }
+      );
+    });
   });
 
   // Use batch to create ScrollTriggers for each wrapper
