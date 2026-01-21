@@ -3355,22 +3355,30 @@ function artworksMarquee() {
       wrapper.draggable = null;
     }
 
-    // Remove cloned marquees (keep only the first one)
-    const marquees = wrapper.querySelectorAll(".marquee");
-    for (let i = 1; i < marquees.length; i++) {
-      marquees[i].remove();
-    }
+    // Remove ONLY the clones we added previously (marked with .marquee-clone)
+    const clones = wrapper.querySelectorAll(".marquee-clone");
+    clones.forEach((clone) => clone.remove());
 
-    // Reset transforms
-    gsap.set(wrapper.querySelector(".marquee"), { clearProps: "all" });
+    // Reset transforms on remaining items
+    const children = wrapper.querySelectorAll(".marquee");
+    gsap.set(children, { clearProps: "all" });
   });
 
   // Clone marquees dynamically based on viewport width
   const wrappers = gsap.utils.toArray(".marquee-wrapper");
 
   wrappers.forEach((wrapper) => {
-    const marquee = wrapper.querySelector(".marquee");
-    if (!marquee) return;
+    // Collect original items - exclude any potential leftover clones
+    // We treat all current .marquee items not marked as clone as "originals"
+    const originals = Array.from(wrapper.querySelectorAll(".marquee")).filter(
+      (el) => !el.classList.contains("marquee-clone")
+    );
+
+    if (originals.length === 0) return;
+
+    // Ensure wrapper is flex and nowrap so items sit in a row
+    wrapper.style.display = "flex";
+    wrapper.style.flexWrap = "nowrap";
 
     // Wait for images to load before calculating dimensions
     const images = wrapper.querySelectorAll("img");
@@ -3383,42 +3391,74 @@ function artworksMarquee() {
     });
 
     Promise.all(imagePromises).then(() => {
-      const style = window.getComputedStyle(marquee);
-      const marginRight = parseFloat(style.marginRight) || 0;
-      const marginLeft = parseFloat(style.marginLeft) || 0;
+      // Calculate total width of the original set
+      let totalSetWidth = 0;
       const wrapperStyle = window.getComputedStyle(wrapper);
       const gap = parseFloat(wrapperStyle.gap) || 0;
-      const box = marquee.getBoundingClientRect();
-      const marqueeWidth = box.width;
 
-      // Calculate full width of one item including spacing
-      let totalDistance = marqueeWidth + marginRight + marginLeft + gap;
+      originals.forEach((el) => {
+        // Ensure items don't shrink so we get their true full width
+        el.style.flexShrink = "0";
+        
+        const style = window.getComputedStyle(el);
+        const marginLeft = parseFloat(style.marginLeft) || 0;
+        const marginRight = parseFloat(style.marginRight) || 0;
+        const rect = el.getBoundingClientRect();
+        
+        totalSetWidth += rect.width + marginLeft + marginRight;
+      });
+      
+      // Add gaps to the total set width
+      // Logic: a set of N items has N-1 gaps internally.
+      // When looping, we need 1 more gap after the last item before the clones start.
+      // So TotalWidth = Sum(widths) + (N * gap)
+      if (gap > 0) {
+        totalSetWidth += gap * originals.length;
+      }
 
       // Safety check
-      if (!totalDistance) return;
+      if (!totalSetWidth) return;
 
       // Initialize isInView if not set
       if (typeof wrapper.isInView === "undefined") {
         wrapper.isInView = false;
       }
 
-      // Calculate how many clones we need to fill the screen + buffer
-      // Increased buffer to ensure fast swipes never run out of content
-      const clonesNeeded = Math.ceil(window.innerWidth / totalDistance) + 4;
+      // Calculate how many CLONED SETS we need to fill the screen + buffer
+      // We want enough content to cover the screen plus a safety buffer
+      const setsNeeded = Math.ceil(window.innerWidth / totalSetWidth) + 1;
 
       // Create clones
-      for (let i = 0; i < clonesNeeded; i++) {
-        wrapper.appendChild(marquee.cloneNode(true));
+      for (let i = 0; i < setsNeeded; i++) {
+        originals.forEach((orig) => {
+          const clone = orig.cloneNode(true);
+          clone.classList.add("marquee-clone");
+          // Ensure clone also has no shrink
+          clone.style.flexShrink = "0";
+          wrapper.appendChild(clone);
+        });
       }
 
-      // Get all elements (original + clones)
+      // Get all elements (original + clones) for animation
+      // We re-query to get them in DOM order
       const allMarquees = wrapper.querySelectorAll(".marquee");
 
-      // Create the animation - animate ALL marquee elements
-      // We still move by totalDistance (one item width) because that's when the pattern repeats
+      // Calculate duration
+      // Adjust speed based on content length so it doesn't get too fast/slow
+      // 70s for a reasonable amount of content. 
+      // Let's normalize speed: 100 pixels per second?
+      // const speed = 100; // px/s
+      // const duration = totalSetWidth / speed;
+      // Sticking to manual tweak factor similar to original:
+      const duration = 70 * originals.length;
+
+      // Create the animation
+      // We move the entire track to the left by the width of ONE SET.
+      // Because the clones are identical to the set, once we move exactly one set width,
+      // the visual state matches the start state (Clone 1 is now where Orig 1 was).
       const anim = gsap.to(allMarquees, {
-        x: -totalDistance,
-        duration: 70,
+        x: -totalSetWidth,
+        duration: duration, 
         ease: "none",
         repeat: -1,
         paused: true,
@@ -3433,9 +3473,8 @@ function artworksMarquee() {
         anim.play();
       }
 
-      // Create a container div to make draggable (proxy element)
+      // Proxy for draggable
       let proxy = document.createElement("div");
-      // Append to wrapper and style it to cover the area
       wrapper.appendChild(proxy);
       gsap.set(proxy, {
         position: "absolute",
@@ -3444,7 +3483,7 @@ function artworksMarquee() {
         width: "100%",
         height: "100%",
         zIndex: 10,
-        opacity: 0, // Invisible but clickable
+        opacity: 0,
       });
 
       wrapper.draggable = Draggable.create(proxy, {
@@ -3457,27 +3496,25 @@ function artworksMarquee() {
         onPressInit: function () {
           anim.pause();
           gsap.killTweensOf(anim);
-          anim.timeScale(1); // Reset timescale to normal in case it was tweening
+          anim.timeScale(1);
 
-          // Sync proxy position with current animation progress
           let currentProgress = anim.progress();
-          let newX = -currentProgress * totalDistance;
+          let newX = -currentProgress * totalSetWidth;
 
           gsap.set(proxy, { x: newX });
           this.update();
         },
         onDrag: function () {
-          let prog = wrap(-this.x / totalDistance);
+          let prog = wrap(-this.x / totalSetWidth);
           anim.progress(prog);
         },
         onThrowUpdate: function () {
-          let prog = wrap(-this.x / totalDistance);
+          let prog = wrap(-this.x / totalSetWidth);
           anim.progress(prog);
         },
         onThrowComplete: function () {
           if (wrapper.isInView) {
             anim.play();
-            // Smoother resume
             gsap.fromTo(
               anim,
               { timeScale: 0 },
@@ -3487,34 +3524,26 @@ function artworksMarquee() {
         },
       })[0];
 
-      // Force overflow hidden to prevent native scroll limits
       wrapper.style.overflow = "hidden";
 
-      // Add wheel listener for trackpad/mousewheel support
       wrapper.addEventListener(
         "wheel",
         (e) => {
-          // Check if scroll is primarily horizontal
-          // distinct from vertical page scroll
           const isHorizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
 
           if (isHorizontal) {
             e.preventDefault();
 
-            // Calculate progress change based on scroll delta
             const delta = e.deltaX;
-            const progressChange = delta / totalDistance;
+            const progressChange = delta / totalSetWidth;
 
-            // Update animation progress
             const currentProg = anim.progress();
             const newProg = wrap(currentProg + progressChange);
 
-            // Pause animation while scrolling manually
             anim.pause();
             anim.progress(newProg);
             gsap.killTweensOf(anim);
 
-            // Debounce resume
             clearTimeout(wrapper.wheelTimeout);
             wrapper.wheelTimeout = setTimeout(() => {
               if (wrapper.isInView) {
@@ -3527,12 +3556,10 @@ function artworksMarquee() {
               }
             }, 100);
 
-            // Update proxy to match new visual state
-            const newX = -newProg * totalDistance;
+            const newX = -newProg * totalSetWidth;
             gsap.set(proxy, { x: newX });
             wrapper.draggable.update();
           }
-          // If vertical, do nothing and let event bubble for native page scroll
         },
         { passive: false }
       );
