@@ -145,6 +145,6 @@
     margin-right: 4px;
 }
 
-.proj-image, .video_vimeo, .video_cover {
+.proj-16x9-carousel__wrapper .proj-image, .video_item .video_vimeo, .video_cover {
     transform: scale(1.01);
 }
